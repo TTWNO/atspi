@@ -1,0 +1,16 @@
+[package]
+name = "atspi"
+version = "0.1.0"
+author = ["Michael Connor Buchan <mikey@blindcomputing.org>"]
+description = "Wrapper around the raw at-spi DBus interface"
+license = "gpl-3-or-later"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+atspi-codegen = { path = "../atspi-codegen", features = ["nonblock"] }
+dbus = { version = "0.9.5", features = ["futures"] }
+futures-core = "0.3.17"
+
+[features]
