@@ -52,18 +52,45 @@ impl<'a> Accessible<'a> {
         Ok(idx)
     }
 
-pub async fn child_at_index(&self, idx: i32) -> Result<Option<Accessible<'a>>, dbus::Error> {
-    let (dest, path) = self.proxy.get_child_at_index(idx).await?;
-    if dest == "org.a11y.atspi.Registry" && path.as_str().unwrap() == "/org/a11y/atspi/null" {
-        Ok(None)
-    } else {
-    let conn = Arc::clone(&self.proxy.connection);
-    Ok(Some(Self::with_timeout(dest, path, conn, self.proxy.timeout)))
+    pub async fn localized_role_name(&self) -> Result<String, dbus::Error> {
+        let (idx,): (String,) = self
+            .proxy
+            .method_call(Self::INTERFACE, "GetLocalizedRoleName", ())
+            .await?;
+        Ok(idx)
     }
-}
+
+    pub async fn child_at_index(&self, idx: i32) -> Result<Option<Accessible<'a>>, dbus::Error> {
+        let (dest, path) = self.proxy.get_child_at_index(idx).await?;
+        if dest == "org.a11y.atspi.Registry" && path.as_str().unwrap() == "/org/a11y/atspi/null" {
+            Ok(None)
+        } else {
+            let conn = Arc::clone(&self.proxy.connection);
+            Ok(Some(Self::with_timeout(
+                dest,
+                path,
+                conn,
+                self.proxy.timeout,
+            )))
+        }
+    }
 
     pub async fn child_count(&self) -> Result<i32, dbus::Error> {
         self.proxy.child_count().await
+    }
+
+    pub async fn children(&self) -> Result<Vec<Accessible<'a>>, dbus::Error> {
+        let (children,): (Vec<(String, dbus::Path<'static>)>,) = self
+            .proxy
+            .method_call(Self::INTERFACE, "GetChildren", ())
+            .await?;
+        let acc_children: Vec<Accessible<'a>> = children
+            .into_iter()
+            .map(|(string, path)| {
+                Accessible::with_timeout(string, path, Arc::clone(&self.proxy.connection), self.proxy.timeout)
+             })
+            .collect();
+        Ok(acc_children)
     }
 
     pub async fn name(&self) -> Result<String, dbus::Error> {
@@ -106,12 +133,10 @@ impl<'b> Stream for ChildStream<'_, 'b> {
             self.current += 1;
             self.fut = None;
         }
-        Poll::Ready(Some(
-            res.map(|(dest, path)| {
-        let conn = Arc::clone(&self.parent.proxy.connection);
-                Accessible::new(dest, path, conn)
-            }),
-        ))
+        Poll::Ready(Some(res.map(|(dest, path)| {
+            let conn = Arc::clone(&self.parent.proxy.connection);
+            Accessible::new(dest, path, conn)
+        })))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
