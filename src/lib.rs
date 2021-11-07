@@ -7,6 +7,7 @@ use std::{
 };
 
 use dbus::{
+    arg::RefArg,
     nonblock::{MethodReply, Proxy, SyncConnection},
     strings::{BusName, Path},
 };
@@ -53,7 +54,7 @@ impl Accessible {
 
 pub async fn child_at_index(&self, idx: i32) -> Result<Option<Self>, dbus::Error> {
     let (dest, path) = self.proxy.get_child_at_index(idx).await?;
-    if dest == "org.a11y.atspi.Registry" && path.as_tr() == "/org/a11y/atspi/null" {
+    if dest == "org.a11y.atspi.Registry" && path.as_str().unwrap() == "/org/a11y/atspi/null" {
         Ok(None)
     } else {
     let conn = Arc::clone(&self.proxy.connection);
