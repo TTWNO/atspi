@@ -17,25 +17,25 @@ use atspi_codegen::accessible::OrgA11yAtspiAccessible;
 
 pub const TIMEOUT: Duration = Duration::from_secs(1);
 
-pub struct Accessible {
-    proxy: Proxy<'static, Arc<SyncConnection>>,
+pub struct Accessible<'a> {
+    proxy: Proxy<'a, Arc<SyncConnection>>,
 }
 
-impl Accessible {
+impl<'a> Accessible<'a> {
     const INTERFACE: &'static str = "org.a11y.atspi.Accessible";
 
     #[inline]
     pub fn new(
-        destination: impl Into<BusName<'static>>,
-        path: impl Into<Path<'static>>,
+        destination: impl Into<BusName<'a>>,
+        path: impl Into<Path<'a>>,
         conn: Arc<SyncConnection>,
     ) -> Self {
         Self::with_timeout(destination, path, conn, TIMEOUT)
     }
 
     pub fn with_timeout(
-        destination: impl Into<BusName<'static>>,
-        path: impl Into<Path<'static>>,
+        destination: impl Into<BusName<'a>>,
+        path: impl Into<Path<'a>>,
         conn: Arc<SyncConnection>,
         timeout: Duration,
     ) -> Self {
@@ -52,7 +52,7 @@ impl Accessible {
         Ok(idx)
     }
 
-pub async fn child_at_index(&self, idx: i32) -> Result<Option<Self>, dbus::Error> {
+pub async fn child_at_index(&self, idx: i32) -> Result<Option<Accessible<'a>>, dbus::Error> {
     let (dest, path) = self.proxy.get_child_at_index(idx).await?;
     if dest == "org.a11y.atspi.Registry" && path.as_str().unwrap() == "/org/a11y/atspi/null" {
         Ok(None)
@@ -75,16 +75,16 @@ pub async fn child_at_index(&self, idx: i32) -> Result<Option<Self>, dbus::Error
     }
 }
 
-pub struct ChildStream<'a> {
-    parent: &'a Accessible,
+pub struct ChildStream<'a, 'b> {
+    parent: &'a Accessible<'b>,
     current: i32,
     total: i32,
     retry: bool,
     fut: Option<MethodReply<(String, Path<'static>)>>,
 }
 
-impl Stream for ChildStream<'_> {
-    type Item = Result<Accessible, dbus::Error>;
+impl<'b> Stream for ChildStream<'_, 'b> {
+    type Item = Result<Accessible<'b>, dbus::Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.current >= self.total {
