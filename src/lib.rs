@@ -14,15 +14,53 @@ use dbus::{
 use futures_core::stream::Stream;
 
 use atspi_codegen::accessible::OrgA11yAtspiAccessible;
+use atspi_codegen::text::OrgA11yAtspiText;
 
 pub const TIMEOUT: Duration = Duration::from_secs(1);
 
 pub struct Accessible<'a> {
     proxy: Proxy<'a, Arc<SyncConnection>>,
 }
+pub struct Text<'a> {
+    proxy: Proxy<'a, Arc<SyncConnection>>,
+}
+
+impl<'a> Text<'a> {
+  const INTERFACE: &'static str = "org.a11y.atspi.Text";
+
+  pub async fn get_text(&self, start_offset: i32, end_offset: i32) -> Result<String, dbus::Error> {
+      self.proxy.get_text(start_offset, end_offset).await
+  }
+
+  pub fn with_timeout(
+        destination: impl Into<BusName<'a>>,
+        path: impl Into<Path<'a>>,
+        conn: Arc<SyncConnection>,
+        timeout: Duration,
+    ) -> Self {
+        Self {
+            proxy: Proxy::new(destination, path, timeout, conn),
+        }
+    }
+}
 
 impl<'a> Accessible<'a> {
     const INTERFACE: &'static str = "org.a11y.atspi.Accessible";
+
+    pub async fn accessible_with_children(&self) -> Result<((String, String), Vec<(String, String)>), dbus::Error> {
+      let text = self.get_text().await.unwrap();
+      let role = self.localized_role_name().await.unwrap();
+      let children = self.children().await.unwrap().into_iter().map(|c| async {
+          (c.get_text().await.unwrap(),
+            c.localized_role_name().await.unwrap())
+      }).collect();
+      Ok(((text,role), children))
+    }
+
+    pub async fn get_text(&self) -> Result<String, dbus::Error> {
+          let length: i32 = self.proxy.character_count().await.unwrap();
+          self.proxy.get_text(0, length).await
+    }
 
     #[inline]
     pub fn new(
@@ -80,10 +118,7 @@ impl<'a> Accessible<'a> {
     }
 
     pub async fn children(&self) -> Result<Vec<Accessible<'a>>, dbus::Error> {
-        let (children,): (Vec<(String, dbus::Path<'static>)>,) = self
-            .proxy
-            .method_call(Self::INTERFACE, "GetChildren", ())
-            .await?;
+        let children = self.proxy.get_children().await?;
         let acc_children: Vec<Accessible<'a>> = children
             .into_iter()
             .map(|(string, path)| {
